@@ -4,14 +4,14 @@ from matplotlib import pyplot as plt
 import time
 
 class target(object):
-    def __init__(self,width=401,sigma_prior=50.0,sigma_true=12.0,bullet_width=10.0):
+    def __init__(self,width=201,sigma_true=12.0,bullet_width=10.0):
+        #TODO: sigma_prior not yet used
         self.sigma_true=sigma_true
         width_old=int(width)
         width=2*(width/2)+1
         if width != width_old:
             print "Warning, target width rounded up to nearest ODD integer, width=%s"%width
         self.width=width
-        self.sigma_prior=sigma_prior
         self.bullet_width=bullet_width
         self.bullet_locations_true=[]
         self.bullet_locations_recorded=[]
@@ -24,15 +24,18 @@ class target(object):
         #make blank taget
         shape=(width,width)
         self.target=np.ones(shape,dtype=int)
+        self.center=float(self.width/2)
+        #define the coordinate arrays (flattened)
+        self.xarr=np.arange(self.npix) % self.width
+        self.yarr=np.arange(self.npix) / self.width
         
     def show(self):
         '''display the target in it's current state'''
         image=self.target.copy()
-        center=float(self.width/2)
         #make cross hairs in the middle when displaying
         x_height=self.width/10
-        image[center,center-x_height:center+x_height]=2
-        image[center-x_height:center+x_height,center]=2
+        image[self.center,self.center-x_height:self.center+x_height]=2
+        image[self.center-x_height:self.center+x_height,self.center]=2
         plt.clf()   #clears display
         plt.imshow(image)
         plt.draw()
@@ -46,13 +49,9 @@ class target(object):
         #consider this the minimum fraction of newly removed paper
         #to be able to recognize this as a recorded shot, otherwise
         #we will call it a missing shot
-        center=float(self.width/2)
-        #define the coordinate arrays (flattened)
-        xarr=np.arange(self.npix) % self.width
-        yarr=np.arange(self.npix) / self.width
-        xb=x+center     #in pixel coordinates where center is not (0,0) but (center,center)
-        yb=y+center 
-        dist2=(xarr-xb)**2 + (yarr-yb)**2       #distance-squared 
+        xb=x+self.center     #in pixel coordinates where center is not (0,0) but (center,center)
+        yb=y+self.center 
+        dist2=(self.xarr-xb)**2 + (self.yarr-yb)**2       #distance-squared 
         target_flat=self.target.reshape(self.npix)     #flatten it
         bullet_rad2=(self.bullet_width/2.0)**2
         bullet_area=bullet_rad2*np.pi
@@ -93,30 +92,23 @@ class target(object):
         printables=(self.name,self.width,self.sigma_true,self.n_shots,self.n_missing)
         return "name=%s, width=%s, sigma_true=%s, n_shots=%s, n_missing=%s"%printables
         
-    def sigma_likeihood(data,sig_min=5,sig_max=30,doplot=False):
+    def sigma_likelihood(self,sig_min=0.3,sig_max=30,n_sigmas=200,doplot=True):
         #so far, ignoring misssing shots
-        (positions,n_missing,num,width,sigma_true)=data
-        sigmas=sig_min+np.arange(sig_max-sig_min)
-        center=width/2
-        xarr=np.arange(width*width) % width
-        yarr=np.arange(width*width) / width
-        xb=center
-        yb=center
-        dist2=(xarr-xb)**2 + (yarr-yb)**2
-        print width,num
+        #sigmas=sig_min+np.arange(sig_max-sig_min)
+        sigmas=np.linspace(sig_min,sig_max,n_sigmas)
+        #dist2=(self.xarr-self.center)**2 + (self.yarr-self.center)**2
         data=[]
         for sig in sigmas:
-            print sig
             tau=1.0/sig**2
             #skip normalization on here
             #gaussian_image=np.exp(-0.5*dist2*tau)
             #likelihood for recorded points
-            dist2_recorded=np.array([x**2+y**2 for x,y in positions])
+            dist2_recorded=np.array([x**2+y**2 for x,y in self.bullet_locations_recorded])
             log_likelihood_each=-0.5*dist2_recorded*tau-2.0*np.log(sig)-np.log(2*np.pi)
             log_likelihood=log_likelihood_each.sum()
             likelihood=np.exp(log_likelihood)
             data.append((sig,log_likelihood))
-            print "sig: %s, log_likelihood: %s"%(sig,log_likelihood)
+            #print "sig: %s, log_likelihood: %s"%(sig,log_likelihood)
         likes=np.array([np.exp(d[1]) for d in data])
         #normalize
         likes=likes/likes.sum()
@@ -125,161 +117,112 @@ class target(object):
         sigma_ML=sigmas[np.argmax(likes)]
         sigma_ML_variance=(likes*(sigmas-sigma_ML)**2).sum() 
         sigma_ML_err=np.sqrt(sigma_ML_variance)
-        zscore=(sigma_ML-sigma_true)/sigma_ML_err
+        zscore=(sigma_ML-self.sigma_true)/sigma_ML_err
+        self.sigma_ML=sigma_ML
+        self.sigma_ML_err=sigma_ML_err
+        self.sigmas=sigmas
+        self.sigma_likelihood=likes
         print "sigma_ML: %s +/- %s   zscore: %s"%(sigma_ML,sigma_ML_err,zscore)
-        print "N_missing: %s"%n_missing
+        print "N_missing: %s"%self.n_missing
         if doplot:
             #plt.figure()
+            plt.clf()
             plt.plot(sigmas,likes)
             plt.xlabel("sigma")
             plt.ylabel("Likelihood")
-            plt.plot([sigma_true,sigma_true],[0,peak*1.1],'--')
+            plt.plot([self.sigma_true,self.sigma_true],[0,peak*1.1],color="green")
             plt.plot([sigma_ML,sigma_ML],[0,peak*1.1],'--',color='red')
-        return (sigma_ML,sigma_ML_err)
-        
+            plt.draw()
+            plt.show()
 
-def make_blank_target(radius=150):
-    '''make the empty target'''
-    width=2*radius+1
-    shape=(width,width)
-    target=np.ones(shape,dtype=int)
-    #show_target(target)
-    return target
+def exp_robust_renorm(x):
+    #assumes numpy array
+    #re-normalizes to max of 1
+    #zero out any exponential that is 50 orders of mag (base e) smaller
+    y=x-x.max()
+    mask=1.0*(y > -50)
+    return mask*np.exp(mask*y)
     
-def show_target(target):
-    '''display the target in it's current state'''
-    image=target.copy()
-    width=target.shape[0]
-    center=width/2
-    #make cross hairs in the middle
-    height=width/10
-    image[center,center-height:center+height]=2
-    image[center-height:center+height,center]=2
-    plt.imshow(image)
-    plt.show()
+def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots=10,show_slow=0):
+    for i in xrange(n_targets):
+        targ=target(width=width,sigma_true=sigma_true,bullet_width=bullet_width)
+        targ.bang(num_shots=num_shots,show_slow=show_slow)
+        targ.sigma_likelihood(doplot=False)
+        log_like=np.log(targ.sigma_likelihood)
+        if i ==0 : 
+            sigmas=targ.sigmas
+            log_likes=log_like
+        else:
+            log_likes+=log_like
+    #likes=exp_robust_renorm(log_likes)
+    likes=np.exp(log_likes)
     
-def shoot_target(target,x,y,bullet_radius=10):
-    '''shoot a hole in the target'''
-    #consider this the minimum fraction of newly removed paper
-    #to be able to recognize this as a recorded shot, otherwise
-    #we will call it a missing shot
-    new_frac_min=0.33
-    width=target.shape[0]
-    center=width/2
-    xarr=np.arange(width*width) % width
-    yarr=np.arange(width*width) / width
-    xb=x+center
-    yb=y+center
-    dist=np.sqrt((xarr-xb)**2 + (yarr-yb)**2)
-    target_flat=target.reshape(width*width)
-    new_hole_pixels=dist < bullet_radius
-    new_removed_area=sum(target_flat[new_hole_pixels])
-    new_removed_fraction=new_removed_area/(np.pi*bullet_radius**2)
-    print "new removed fraction %s"%new_removed_fraction
-    
-    missing=False
-    if new_removed_fraction < new_frac_min:
-        missing=True
-        
-    if missing:
-        print "Missing shot!!"
-    else:
-        print "Recorded shot"
-    target_flat[new_hole_pixels] =0
-    target=target_flat.reshape(width,width)   
-    #show_target(target)
-    return missing
-    
-def shoot_target_random(target,sigma,bullet_radius=10):
-    '''shoot a random point in the target'''
-    x=np.random.randn()*sigma
-    y=np.random.randn()*sigma
-    missing=shoot_target(target,x,y,bullet_radius=bullet_radius)
-    return (x,y,missing)
-    
-def make_pattern(sigma,num=10,radius=150,prompt=False,showit=False):
-    '''make a whole target pattern''' 
-    target=make_blank_target(radius=radius)    
-    positions=[]
-    n_missing=0
-    for i in xrange(num):
-        (x,y,missing)=shoot_target_random(target,sigma,bullet_radius=10)
-        if not missing:
-            positions.append((x,y))
-        n_missing+=int(missing)
-        if prompt:
-            show_target(target)
-            a=raw_input("ok?")
-            if a == 'q' : break
-    if showit: show_target(target)
-    print "\nN missing: %s"%n_missing 
-    print "N recorded: %s"%(num-n_missing) 
-    print "\nrecorded positions:"
-    for p in positions: print p
-    width=width=2*radius+1
-    return (positions,n_missing,num,width,sigma)
-    
-def sigma_likeihood(data,sig_min=5,sig_max=30,doplot=False):
-    #so far, ignoring misssing shots
-    (positions,n_missing,num,width,sigma_true)=data
-    sigmas=sig_min+np.arange(sig_max-sig_min)
-    center=width/2
-    xarr=np.arange(width*width) % width
-    yarr=np.arange(width*width) / width
-    xb=center
-    yb=center
-    dist2=(xarr-xb)**2 + (yarr-yb)**2
-    print width,num
-    data=[]
-    for sig in sigmas:
-        print sig
-        tau=1.0/sig**2
-        #skip normalization on here
-        #gaussian_image=np.exp(-0.5*dist2*tau)
-        #likelihood for recorded points
-        dist2_recorded=np.array([x**2+y**2 for x,y in positions])
-        log_likelihood_each=-0.5*dist2_recorded*tau-2.0*np.log(sig)-np.log(2*np.pi)
-        log_likelihood=log_likelihood_each.sum()
-        likelihood=np.exp(log_likelihood)
-        data.append((sig,log_likelihood))
-        print "sig: %s, log_likelihood: %s"%(sig,log_likelihood)
-    likes=np.array([np.exp(d[1]) for d in data])
-    #normalize
+    #re-normalize to unit area
     likes=likes/likes.sum()
-    #get maximum likelihoods
     peak=max(likes)
     sigma_ML=sigmas[np.argmax(likes)]
-    sigma_ML_variance=(likes*(sigmas-sigma_ML)**2).sum() 
-    sigma_ML_err=np.sqrt(sigma_ML_variance)
-    zscore=(sigma_ML-sigma_true)/sigma_ML_err
-    print "sigma_ML: %s +/- %s   zscore: %s"%(sigma_ML,sigma_ML_err,zscore)
-    print "N_missing: %s"%n_missing
-    if doplot:
-        #plt.figure()
-        plt.plot(sigmas,likes)
-        plt.xlabel("sigma")
-        plt.ylabel("Likelihood")
-        plt.plot([sigma_true,sigma_true],[0,peak*1.1],'--')
-        plt.plot([sigma_ML,sigma_ML],[0,peak*1.1],'--',color='red')
-    return (sigma_ML,sigma_ML_err)
-            
-def simulate(sigma=10.0,num=100):
-    data=[]
-    for i in xrange(num): 
-        data.append(sigma_likeihood(make_pattern(sigma)))            
-    sig_ml=np.array([d[0] for d in data])
-    diff=(sig_ml-sigma)
-    bias=diff.mean()
-    std=diff.std()
-    bias_stderr=std/np.sqrt(num)
-    rms=np.sqrt((diff**2).mean())
-    percent_error=100.0*bias/sigma
-    percent_error_uncert=100.0*bias_stderr/sigma
-    print "\nsimulation result: sigma_true=%s,num_sim=%s"%(sigma,num)
-    print "bias: %s +/- %s , rms: %s"%(bias,bias_stderr,rms)
-    print "percent error: %0.2f +/- %0.2f"%(percent_error,percent_error_uncert)
+    plt.clf()
+    plt.plot(sigmas,likes)
+    plt.xlabel("sigma")
+    plt.ylabel("Likelihood")
+    plt.plot([targ.sigma_true,targ.sigma_true],[0,peak*1.1],color="green")
+    plt.plot([sigma_ML,sigma_ML],[0,peak*1.1],'--',color='red')
+    plt.xlim(0,targ.sigma_true*2)
+    plt.draw()
+    plt.show()
+        
+    bias=sigma_ML-sigma_true
+    #error about the ML value
+    std=np.sqrt(((targ.sigmas-sigma_ML)**2 *likes).sum())
     
-           
+    print "\nsimulation result: sigma_true=%s,num_targets=%s, sigma_ML=%s"%(sigma_true,n_targets,sigma_ML)
+    print "bias: %s +/- %s"%(bias,std)
+    #print "percent error: %0.2f +/- %0.2f"%(percent_error,percent_error_uncert)
+    
+def test():
+    prompt=True
+    print "Testing everything\n"
+    print "Making a target and displaying it"
+    targ=target()
+    targ.show()
+    if prompt : 
+        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        if input == 'q' : return 1
+    print "Shooting a bullet, BANG!"
+    targ.bang()
+    targ.show()
+    if prompt : 
+        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        if input == 'q' : return 1
+    print "Shooting 5 more bullets (with time delay)"
+    targ.bang(num_shots=5,show_slow=.1)
+    targ.show()
+    if prompt : 
+        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        if input == 'q' : return 1
+    print "Trying to calculate the likelihood of sigma from the data"
+    targ.sigma_likelihood()
+    if prompt : 
+        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        if input == 'q' : return 1
+    print "Now going to simulate the Bayesian way of combining 20 targets"
+    simulate(n_targets=20)
+    if prompt : 
+        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        if input == 'q' : return 1
+    sigma_true=3.0
+    print "Now going to simulate the Bayesian way of combining 20 targets for a very small sigma_true=%s"%sigma_true
+    simulate(n_targets=20,sigma_true=sigma_true)
+    print "Now it is clear that it is biased because it is ignoring bullets that didn't leave obvious marks"
+    if prompt : 
+        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        if input == 'q' : return 1
+    print "Lets see this visually"
+    targ=target(sigma_true=sigma_true)
+    targ.bang(num_shots=10,show_slow=0.2)
+    targ.show()
+    print "See they are all bunched up and overlapping"
+    print "The current method is biased. We need to correct for this bias which is a TODO"
             
             
             
