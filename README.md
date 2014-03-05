@@ -1,7 +1,7 @@
 bullets
 =======
 
-I recommend you use ipython in pylab mode. Otherwise the plotting will block.
+This currenly requires that you use ipython in pylab mode. Otherwise the plotting will block and be very annoying. 
 
 ipython --pylab
 
