@@ -1,5 +1,0 @@
-#plan
-
-1) Simulate image of bullet pattern, given sigma
-2) Determine the posterior of sigma given the known shots. 
-3) Calculate the additional term from the given bullet pattern. 
