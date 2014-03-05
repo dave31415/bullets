@@ -7,7 +7,7 @@ ipython --pylab
 
 ipython> import bullets
 
-#run the test demo which shows Bayesian statsitics in action
+run the test demo which shows Bayesian statsitics in action
 
 ipython> bullets.test()
 
