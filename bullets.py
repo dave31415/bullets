@@ -21,6 +21,7 @@ class target(object):
         self.npix=width**2      #assumed to be square
         self.n_missing=0
         self.n_shots=0
+        self.correct=False
         self.name='TARGET'
         #make blank taget
         shape=(width,width)
@@ -42,11 +43,9 @@ class target(object):
         plt.draw()
         plt.show()
         
-    def shoot_point(self,point):
+    def shoot_point(self,point,update=True):
         '''Shoot a hole in the target at position x,y w.r.t the center being (0,0)'''
         x,y=point
-        self.bullet_locations_true.append((x,y))
-        self.n_shots+=1
         #consider this the minimum fraction of newly removed paper
         #to be able to recognize this as a recorded shot, otherwise
         #we will call it a missing shot
@@ -60,15 +59,24 @@ class target(object):
         new_removed_area=sum(target_flat[new_hole_pixels])   #how many of the new pixels get removed
         new_removed_fraction=new_removed_area/bullet_area
         #print "new removed fraction %s"%new_removed_fraction
-        if new_removed_fraction > self.new_frac_min:
-            #we will use this simple huristic for now to determine whether this will be a recordable shot
-            self.bullet_locations_recorded.append((x,y))
-        else:
+        missing=False
+        if new_removed_fraction < self.new_frac_min:
             #bullet hole unclear, call it a missing shot
-            self.n_missing+=1
-        #remove the pixels
-        target_flat[new_hole_pixels] =0
-        self.target=target_flat.reshape(self.width,self.width)  
+            missing=True
+        if update:
+            #this allows for not duplicating code
+            #remove the pixels
+            target_flat[new_hole_pixels] =0
+            self.target=target_flat.reshape(self.width,self.width)  
+            self.bullet_locations_true.append((x,y))
+            self.n_shots+=1
+            if missing :
+                self.n_missing+=1
+            else :
+                self.bullet_locations_recorded.append((x,y))
+        else:
+            #this is another use case, return missing
+            return missing
     
     def bang(self,num_shots=1,show_slow=0.0):
         '''shoot a random point in the target'''
@@ -93,7 +101,7 @@ class target(object):
         printables=(self.name,self.width,self.sigma_true,self.n_shots,self.n_missing)
         return "name=%s, width=%s, sigma_true=%s, n_shots=%s, n_missing=%s"%printables
         
-    def sigma_likelihood(self,sig_min=0.3,sig_max=30,n_sigmas=200,doplot=True):
+    def sigma_likelihood(self,sig_min=0.3,sig_max=30,n_sigmas=300,doplot=True):
         """Calculate the likelihood for sigma (the unknown Gaussian spread parameter)"""
         #so far, ignoring misssing shots
         #sigmas=sig_min+np.arange(sig_max-sig_min)
@@ -112,9 +120,26 @@ class target(object):
             data.append((sig,log_likelihood))
             #print "sig: %s, log_likelihood: %s"%(sig,log_likelihood)
         likes=np.array([np.exp(d[1]) for d in data])
-        #normalize
+        #normalize 
         likes=likes/likes.sum()
+        
         #get maximum likelihoods
+        peak=max(likes)
+        sigma_ML=sigmas[np.argmax(likes)]
+        self.sigma_ML=sigma_ML
+        self.sigmas=sigmas
+        self.sigma_likelihoods=likes
+        
+        uncorrected=likes.copy()
+        if self.correct:
+            #correction here
+            self.make_likelihood_missing_function()
+            self.correct_for_missing()
+            likes=self.missing_correction*likes
+            #normalize 
+            likes=likes/likes.sum()
+        
+        #get maximum likelihoods now with the correction
         peak=max(likes)
         sigma_ML=sigmas[np.argmax(likes)]
         sigma_ML_variance=(likes*(sigmas-sigma_ML)**2).sum() 
@@ -123,19 +148,49 @@ class target(object):
         self.sigma_ML=sigma_ML
         self.sigma_ML_err=sigma_ML_err
         self.sigmas=sigmas
-        self.sigma_likelihood=likes
+        self.sigma_likelihoods=likes
+        
         print "sigma_ML: %s +/- %s   zscore: %s"%(sigma_ML,sigma_ML_err,zscore)
         print "N_missing: %s"%self.n_missing
         if doplot:
             #plt.figure()
             plt.clf()
             plt.plot(sigmas,likes)
+            plt.plot(sigmas,uncorrected,'--')
             plt.xlabel("sigma")
             plt.ylabel("Likelihood")
             plt.plot([self.sigma_true,self.sigma_true],[0,peak*1.1],color="green")
             plt.plot([sigma_ML,sigma_ML],[0,peak*1.1],'--',color='red')
             plt.draw()
             plt.show()
+            
+    def correct_for_missing(self):
+        if self.n_missing == 0:
+            self.missing_correction=self.sigmas*0.0+1.0
+        like_missing=self.sigma_likelihood_missing(self.sigmas)
+        self.missing_correction=(like_missing)**self.n_missing
+        
+    def likelihood_missing(self,sigma,n_sample=100):
+        num_inside_hole=0
+        for i in xrange(n_sample):
+            x=np.random.randn()*sigma
+            y=np.random.randn()*sigma    
+            point=(x,y)
+            inside_the_hole=self.shoot_point(point,update=False)
+            num_inside_hole+=int(inside_the_hole)
+        return num_inside_hole/float(n_sample)
+
+    def make_likelihood_missing_function(self,num_sigma_points=20):
+        frac=0.33
+        sig_min=self.sigma_ML*frac
+        sig_max=self.sigma_ML/frac
+        sigmas=np.linspace(sig_min,sig_max,num_sigma_points)
+        likes=np.array([self.likelihood_missing(s) for s in sigmas])
+        plt.clf()
+        params=fit_my_func(sigmas, likes)
+        def sigma_likelihood_missing_func(sig):
+            return myfunc(params,sig)
+        self.sigma_likelihood_missing=sigma_likelihood_missing_func
 
 def exp_robust_renorm(x):
     '''avoid underflow and renormalize to peak of 1'''
@@ -146,14 +201,15 @@ def exp_robust_renorm(x):
     mask=1.0*(y > -50)
     return mask*np.exp(mask*y)
     
-def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots=10,show_slow=0):
+def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots=10,show_slow=0,correct=False):
     '''Simulate shooting a number of targets and using Bayesian statistics to combine the results into
         an overall likelihood'''
     for i in xrange(n_targets):
         targ=target(width=width,sigma_true=sigma_true,bullet_width=bullet_width)
+        targ.correct=correct
         targ.bang(num_shots=num_shots,show_slow=show_slow)
         targ.sigma_likelihood(doplot=False)
-        log_like=np.log(targ.sigma_likelihood)
+        log_like=np.log(targ.sigma_likelihoods)
         if i ==0 : 
             sigmas=targ.sigmas
             log_likes=log_like
@@ -183,7 +239,52 @@ def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots
     print "\nsimulation result: sigma_true=%s,num_targets=%s, sigma_ML=%s"%(sigma_true,n_targets,sigma_ML)
     print "bias: %s +/- %s"%(bias,std)
     #print "percent error: %0.2f +/- %0.2f"%(percent_error,percent_error_uncert)
+
+def myfunc(params,sigma):
+    ''' a function that seems to fit these curves'''
+    amp = params['amp'].value
+    core = params['core'].value
+    beta = params['beta'].value
+    model = amp * np.exp(-np.sqrt(sigma**2+core**2)/beta)
+    return model
+
+def func2min(params, sigma, like):
+    ''' a function to minimize'''
+    return myfunc(params,sigma) - like
+        
+def fit_my_func(sigma, like):
+    '''Fit my favorite function to the likelihood data'''
+    from lmfit import minimize, Parameters, Parameter, report_fit
+        
+    params = Parameters()
+    params.add('amp',   value= 2.5,  min=0.0)
+    params.add('beta', value= 8.0,min=0.1)
+    params.add('core', value= 2.0, min=0.01)
     
+    print params
+    # do fit, here with leastsq model
+    result = minimize(func2min, params, args=(sigma, like))
+    print params
+    
+    # calculate final result
+    final = like + result.residual
+
+    # write error report
+    report_fit(params)
+
+    # try to plot results
+    try:
+        plt.plot(sigma, like, 'k+')
+        plt.plot(sigma, final, 'r')
+        plt.draw()
+        plt.show()
+        print 'sleeping 1 sec'
+        time.sleep(1)
+    except:
+        pass
+    
+    return params
+
 def test():
     '''A test that demos how this works'''
     prompt=True
@@ -192,36 +293,36 @@ def test():
     targ=target()
     targ.show()
     if prompt : 
-        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        input=raw_input("Ok? (q to quit)")
         if input == 'q' : return 1
     print "Shooting a bullet, BANG!"
     targ.bang()
     targ.show()
-    if prompt : 
-        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+    if prompt :
+        input=raw_input("Ok? (q to quit)") 
         if input == 'q' : return 1
     print "Shooting 5 more bullets (with time delay)"
     targ.bang(num_shots=5,show_slow=.1)
     targ.show()
     if prompt : 
-        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        input=raw_input("Ok? (q to quit)") 
         if input == 'q' : return 1
     print "Trying to calculate the likelihood of sigma from the data"
     targ.sigma_likelihood()
     if prompt : 
-        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        input=raw_input("Ok? (q to quit)") 
         if input == 'q' : return 1
     print "Now going to simulate the Bayesian way of combining 20 targets"
-    simulate(n_targets=20)
+    simulate(n_targets=30)
     if prompt : 
-        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        input=raw_input("Ok? (q to quit)") 
         if input == 'q' : return 1
     sigma_true=3.0
     print "Now going to simulate the Bayesian way of combining 20 targets for a very small sigma_true=%s"%sigma_true
-    simulate(n_targets=20,sigma_true=sigma_true)
+    simulate(n_targets=30,sigma_true=sigma_true)
     print "Now it is clear that it is biased because it is ignoring bullets that didn't leave obvious marks"
     if prompt : 
-        input=raw_input("Ok? (if not in ipython, you have to kill the window first)")
+        input=raw_input("Ok? (q to quit)") 
         if input == 'q' : return 1
     print "Lets see this visually"
     targ=target(sigma_true=sigma_true)
@@ -229,6 +330,16 @@ def test():
     targ.show()
     print "See they are all bunched up and overlapping"
     print "The current method is biased. We need to correct for this bias which is a TODO"
-            
-            
+    if prompt : 
+        input=raw_input("Ok? (q to quit)") 
+        if input == 'q' : return 1
+    print "OK, the correction for missing bullets is now implemented but quite slow at the moment"
+    print "Lets try it to see if it works better"
+    simulate(n_targets=30,sigma_true=sigma_true,correct=True)
+    print "If all went well, this posterior should contain the green line which is the true value"   
+    
+
+
+
+      
             
