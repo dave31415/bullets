@@ -9,6 +9,7 @@ class target(object):
         self.sigma_true=sigma_true
         width_old=int(width)
         width=2*(width/2)+1
+        #width is the width of the square target 
         if width != width_old:
             print "Warning, target width rounded up to nearest ODD integer, width=%s"%width
         self.width=width
@@ -93,6 +94,7 @@ class target(object):
         return "name=%s, width=%s, sigma_true=%s, n_shots=%s, n_missing=%s"%printables
         
     def sigma_likelihood(self,sig_min=0.3,sig_max=30,n_sigmas=200,doplot=True):
+        """Calculate the likelihood for sigma (the unknown Gaussian spread parameter)"""
         #so far, ignoring misssing shots
         #sigmas=sig_min+np.arange(sig_max-sig_min)
         sigmas=np.linspace(sig_min,sig_max,n_sigmas)
@@ -136,6 +138,7 @@ class target(object):
             plt.show()
 
 def exp_robust_renorm(x):
+    '''avoid underflow and renormalize to peak of 1'''
     #assumes numpy array
     #re-normalizes to max of 1
     #zero out any exponential that is 50 orders of mag (base e) smaller
@@ -144,6 +147,8 @@ def exp_robust_renorm(x):
     return mask*np.exp(mask*y)
     
 def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots=10,show_slow=0):
+    '''Simulate shooting a number of targets and using Bayesian statistics to combine the results into
+        an overall likelihood'''
     for i in xrange(n_targets):
         targ=target(width=width,sigma_true=sigma_true,bullet_width=bullet_width)
         targ.bang(num_shots=num_shots,show_slow=show_slow)
@@ -180,6 +185,7 @@ def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots
     #print "percent error: %0.2f +/- %0.2f"%(percent_error,percent_error_uncert)
     
 def test():
+    '''A test that demos how this works'''
     prompt=True
     print "Testing everything\n"
     print "Making a target and displaying it"
