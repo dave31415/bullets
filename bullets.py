@@ -101,7 +101,7 @@ class target(object):
         printables=(self.name,self.width,self.sigma_true,self.n_shots,self.n_missing)
         return "name=%s, width=%s, sigma_true=%s, n_shots=%s, n_missing=%s"%printables
         
-    def sigma_likelihood(self,sig_min=0.3,sig_max=30,n_sigmas=300,doplot=True):
+    def sigma_likelihood(self,sig_min=0.5,sig_max=40,n_sigmas=500,doplot=True):
         """Calculate the likelihood for sigma (the unknown Gaussian spread parameter)"""
         #so far, ignoring misssing shots
         #sigmas=sig_min+np.arange(sig_max-sig_min)
@@ -181,7 +181,7 @@ class target(object):
         return num_inside_hole/float(n_sample)
 
     def make_likelihood_missing_function(self,num_sigma_points=20):
-        frac=0.33
+        frac=0.5
         sig_min=self.sigma_ML*frac
         sig_max=self.sigma_ML/frac
         sigmas=np.linspace(sig_min,sig_max,num_sigma_points)
@@ -259,7 +259,7 @@ def fit_my_func(sigma, like):
     params = Parameters()
     params.add('amp',   value= 2.5,  min=0.0)
     params.add('beta', value= 8.0,min=0.1)
-    params.add('core', value= 2.0, min=0.01)
+    params.add('core', value= 2.0, min=0.1,max=5.0)
     
     print params
     # do fit, here with leastsq model
@@ -329,7 +329,7 @@ def test():
     targ.bang(num_shots=10,show_slow=0.2)
     targ.show()
     print "See they are all bunched up and overlapping"
-    print "The current method is biased. We need to correct for this bias which is a TODO"
+    print "The current method is biased. We need to correct for this bias"
     if prompt : 
         input=raw_input("Ok? (q to quit)") 
         if input == 'q' : return 1
