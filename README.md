@@ -51,6 +51,11 @@ be Normal, this is just a question of calculating the posterior probability of t
 work as Bayesians is done. We can pick out the mean or mode of that distribution if we need a single number and measure
 the variance of that distribution to give us an uncertainty. But calculating the posterior is our goal.  
 
+Calculating the posterior of sigma with known mean is a problem studies in almost every book on Bayesian statistics as
+one of the first examples of a non-trivial use of Bayes Theorem. However, this typically done with 1D Normal distributions
+not 2D. However, the changes required to do this in 2D are minimal. See section 5 at this link
+http://www.cs.ubc.ca/~murphyk/Papers/bayesGauss.pdf
+
 
 
 
