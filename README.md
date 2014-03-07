@@ -19,8 +19,9 @@ so that we can determine who are the best amongst them.
 
 We're going to start with the following assumptions:
 
-We assume that the shooters all shoot from a 2D Normal distribution but that each has a different value for 
-sigma, the dispersion parameter of the Normal distribution. We'll also assume that the mean is zero, that is, there
+We assume that the shooters all shoot from a 2D Normal (circularly symmetric) distribution but that 
+each has a different value for sigma, the dispersion parameter of the Normal distribution. 
+We'll also assume that the mean is zero, that is, there
 is no bias away from the center of the bulls-eye - there is just a scatter about it. 
 
 The data is the image of the shot target where 10 shots have been fired. The major complication that we
