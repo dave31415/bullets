@@ -46,9 +46,6 @@ class target(object):
     def shoot_point(self,point,update=True):
         '''Shoot a hole in the target at position x,y w.r.t the center being (0,0)'''
         x,y=point
-        #consider this the minimum fraction of newly removed paper
-        #to be able to recognize this as a recorded shot, otherwise
-        #we will call it a missing shot
         xb=x+self.center     #in pixel coordinates where center is not (0,0) but (center,center)
         yb=y+self.center 
         dist2=(self.xarr-xb)**2 + (self.yarr-yb)**2       #distance-squared 
@@ -336,7 +333,8 @@ def test():
     print "OK, the correction for missing bullets is now implemented but quite slow at the moment"
     print "Lets try it to see if it works better"
     simulate(n_targets=30,sigma_true=sigma_true,correct=True)
-    print "If all went well, this posterior should contain the green line which is the true value"   
+    print '''If all went well, this posterior should contain the green line which is the true value. If not
+    just do it again as it might simply be bad luck.'''
     
 
 
