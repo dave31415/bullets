@@ -36,7 +36,7 @@ How can we come up with an optimal measure of shooting accuracy, given the assum
 the images of spent tagtes. 
 
 Sketch of the Solution
-=============
+=======================
 We are going to offer a solution with the real goal of teaching Bayesian statistics without a lot of math. That is, we will
 simply try to use numerical computation applied directly to Bayes Theorem. We do this in Python but could easily do it in 
 R or pretty much any language.  
