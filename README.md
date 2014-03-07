@@ -32,7 +32,7 @@ bullets went.
 How can we come up with an optimal measure of shooting accuracy, given the assumptions stated above, simply from 
 the images of spent tagtes. 
 
-The Solution
+Sketch of the Solution
 =============
 We are going to offer a solution with the real goal of teaching Bayesian statistics without a lot of math. That is, we will
 simply try to use numerical computation applied directly to Bayes Theorem. We do this in Python but could easily do it in 
@@ -54,7 +54,16 @@ the variance of that distribution to give us an uncertainty. But calculating the
 Calculating the posterior of sigma with known mean is a problem studies in almost every book on Bayesian statistics as
 one of the first examples of a non-trivial use of Bayes Theorem. However, this typically done with 1D Normal distributions
 not 2D. However, the changes required to do this in 2D are minimal. See section 5 at this link
-http://www.cs.ubc.ca/~murphyk/Papers/bayesGauss.pdf
+http://www.cs.ubc.ca/~murphyk/Papers/bayesGauss.pdf. That reference explains many variance on this problem as well as how
+to incorporate conjugate priors. 
+
+Solving these two subproblems solves the simple case of separated bullets. All you need to record are the radii of the
+shots. In fact all you really need to keep is the sufficient statistic of the average of the square of the radii plus the
+product of the radii (this second one, the product is required for the solution in any dimension higher than 1). 
+
+When there is overlap
+---------------------
+
 
 
 
