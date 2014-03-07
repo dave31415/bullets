@@ -29,11 +29,29 @@ wish to address is that the bullet holes are not point-like. They have a diamete
 the ones we are most interested in, the bullet holes overlap at the center and it isn't clear exactly where all the
 bullets went. 
 
-How can we come up with an optimal measure of shooting accuracy, given the assumptions stated above?
+How can we come up with an optimal measure of shooting accuracy, given the assumptions stated above, simply from 
+the images of spent tagtes. 
 
 The Solution
 =============
 We are going to offer a solution with the real goal of teaching Bayesian statistics without a lot of math. That is, we will
 simply try to use numerical computation applied directly to Bayes Theorem. We do this in Python but could easily do it in 
 R or pretty much any language.  
+
+Simple case of no overlap
+---------------------------
+
+We can break this problem up into several pieces. The simplest case is when all 10 bullet holes are apparent. 
+In this case, there are two subproblems to solve. One is the image processing task of locating the positions of the
+holes on the image of the target. This problem is not very hard and doesn't have much to do with Bayesian 
+statistics so we will put it aside for now and assume that it is done. 
+
+Now with the 10 bullet locations we need to find the estimator of accuracy. Since we have already defined the distribution to
+be Normal, this is just a question of calculating the posterior probability of the parameter sigma. One we have done that, our
+work as Bayesians is done. We can pick out the mean or mode of that distribution if we need a single number and measure
+the variance of that distribution to give us an uncertainty. But calculating the posterior is our goal.  
+
+
+
+
 
