@@ -1,7 +1,8 @@
 bullets
 =======
 
-This currenly requires that you use ipython in pylab mode. Otherwise the plotting will block and be very annoying. 
+This currenly requires that you use ipython in pylab mode. Otherwise the plotting will block and be 
+very annoying. You also need the package lmfit. (e.g. sudo pip install lmfit).
 
 ipython --pylab
 
@@ -63,6 +64,59 @@ product of the radii (this second one, the product is required for the solution 
 
 When there is overlap
 ---------------------
+This is solved again by breaking the problem into two parts. Some of the bullets leave recordable locations on the target. 
+Some of them are missing.
+
+Note that the data, the target image, will look the same regardless of the order of the shots.
+This is important as we can then assume without loss of generality that all the bullets that created recordable holes
+came first and the others which left no mark came last. 
+
+So we can treat this as two separate experiments. Let's say that of the 10 shots, we can easily identify 6 of them. They are
+either disconnected completely from other holes or at least leave a recognizable semi-circular outline on the target. This
+again is a separate image processing task that we will put aside for the moment. 
+
+Now dealing with these 6 bullets is reduced to the simple case describe above. If we stopped there and ignored the
+other four bullets, we would get an estimate of accuracy that is too low as we are not giving them credit 
+for the last 4 bullets and so we get a biased solution. 
+
+We need to then consider the second experiment where four bullets were fired and did not leave a new hole. 
+
+We combine experiments by multiplying likelihoods since each shot is statistically independent but comes from the 
+same distribution, i.e., the shooter is the same and so is sigma. For the simple problem above we knew to calculate 
+the likelihood as a product of Normal distributions. We do the same for the problem here with the 6 bullets. 
+
+What is the likelihood for the 4 bullets? We don't know where they went. All we know is where
+they DIDN'T go. They didn't make new holes. So, what is the probability that someone firing with a normal 
+distribution (and some particular sigma) will fire at the target and not create new holes? That is just the 
+integral (or sum) over the 2D Gaussian distribution multiplied by the mask defined by the target as it stands after
+those 6 recognizable shots have been fired. Well, given that the bullets have finite size, it is a little different 
+as you have to buffer the edges a bit. Still, it is a fairly easy thing to calculate numerically. 
+
+So there you have it. We have a curve for the likelihood of sigma from the recorded bullets. We shall see, that 
+this looks like a skewed bell shape function that peaks around the average of the square of the radii. We also have a
+likelihood curve for the 4 bullets that landed in the masked region. This curve drops monotonically with sigma not very 
+different from an exponential function P(sigma) ~ exp(-sigma / scale_parameter). Multiplying these curves together
+results in a similar skewed, bell-shaped curve but one that peaks at lower sigma (higher accuracy). Thus, the
+curve from the four missing bullets does what we had hoped: it gives the shooter credit for those good shots and gives
+us more confidence about their shooting accuracy. 
+
+The code included here performs this basic calculation. It has some visualizations to actually see the targets as
+well as seeing the posterior probabilities. I have cheated a bit and used a heuristic to determine which bullets are 
+recordable and which are not and used their input coordinates when I have decided they would be recordable. This just
+allows me to skip the image processing tasks for now and concentrate on the rest of the problem involving Bayesian 
+statistics.  
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
