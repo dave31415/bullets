@@ -30,7 +30,7 @@ wish to address is that the bullet holes are not point-like. They have a diamete
 the ones we are most interested in, the bullet holes overlap at the center and it isn't clear exactly where all the
 bullets went. 
 
-[](Target.jpg)
+[Image Here](Target.jpg)
 
 How can we come up with an optimal measure of shooting accuracy, given the assumptions stated above, simply from 
 the images of spent tagtes. 
