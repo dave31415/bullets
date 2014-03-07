@@ -59,7 +59,7 @@ to incorporate conjugate priors.
 
 Solving these two subproblems solves the simple case of separated bullets. All you need to record are the radii of the
 shots. In fact all you really need to keep is the sufficient statistic of the average of the square of the radii plus the
-product of the radii (this second one, the product is required for the solution in any dimension higher than 1). 
+product of the radii (this second one, the product is required for the solution in any dimension higher than 1.
 
 When there is overlap
 ---------------------
