@@ -5,7 +5,6 @@ import time
 
 class target(object):
     def __init__(self,width=201,sigma_true=12.0,bullet_width=10.0):
-        #TODO: sigma_prior not yet used
         self.sigma_true=sigma_true
         width_old=int(width)
         width=2*(width/2)+1
@@ -18,7 +17,7 @@ class target(object):
         self.bullet_locations_recorded=[]
         self.new_frac_min=0.35   #when a bullet removes this much area, we will recognize it 
                                  #as a recordable shot, not great but OK for now
-        self.npix=width**2      #assumed to be square
+        self.npix=width**2    #assumed to be square
         self.n_missing=0
         self.n_shots=0
         self.correct=False
@@ -44,7 +43,11 @@ class target(object):
         plt.show()
         
     def shoot_point(self,point,update=True):
-        '''Shoot a hole in the target at position x,y w.r.t the center being (0,0)'''
+        '''Shoot a hole in the target at position x,y w.r.t the center being (0,0).
+        If update is False, this doesn't actually produce a new hole but rather just returns 
+        whether or not the shot WOULD have created a new hole versus a missing one.
+        Some tolerance is allowed for whether it is considered a new hole. 
+        '''
         x,y=point
         xb=x+self.center     #in pixel coordinates where center is not (0,0) but (center,center)
         yb=y+self.center 
@@ -58,7 +61,8 @@ class target(object):
         #print "new removed fraction %s"%new_removed_fraction
         missing=False
         if new_removed_fraction < self.new_frac_min:
-            #bullet hole unclear, call it a missing shot
+            #Not obviously a new hole, call it a missing shot
+            #perhaps this should be tweaked and made smaller
             missing=True
         if update:
             #this allows for not duplicating code
@@ -129,9 +133,16 @@ class target(object):
         
         uncorrected=likes.copy()
         if self.correct:
-            #correction here
+            #correction here if correct is turnd on, off by default
+            
+            #This makes the fitting function that defines the missing likelihood
+            #I would rather a smooth curve than one with wiggles due to finite monte carlo draws 
+            #this creates the closure as a method called sigma_likelihood_missing
             self.make_likelihood_missing_function()
+            #actually compute it at the same set of sigma points, stick answer in the object
             self.correct_for_missing()
+            #multiply the two likelihood curves together 
+            #one for recorded bullets and one for the missing ones
             likes=self.missing_correction*likes
             #normalize 
             likes=likes/likes.sum()
@@ -162,22 +173,28 @@ class target(object):
             plt.show()
             
     def correct_for_missing(self):
+        '''Actually do the correction at the same sigmas as for the recorded likelihood'''
         if self.n_missing == 0:
             self.missing_correction=self.sigmas*0.0+1.0
         like_missing=self.sigma_likelihood_missing(self.sigmas)
         self.missing_correction=(like_missing)**self.n_missing
         
     def likelihood_missing(self,sigma,n_sample=100):
+        '''Calculate the missing likelihood using monte carlo integration. The result is just the fraction 
+        of simulated shots that do not create a new hole.'''
         num_inside_hole=0
         for i in xrange(n_sample):
             x=np.random.randn()*sigma
             y=np.random.randn()*sigma    
             point=(x,y)
+            #is it inside the hole?
             inside_the_hole=self.shoot_point(point,update=False)
             num_inside_hole+=int(inside_the_hole)
         return num_inside_hole/float(n_sample)
 
     def make_likelihood_missing_function(self,num_sigma_points=20):
+        '''Define a smooth function for the missing likelihood since the missing likelihood is approximated
+        by monte carlo at several different sigma'''
         frac=0.5
         sig_min=self.sigma_ML*frac
         sig_max=self.sigma_ML/frac
@@ -203,6 +220,7 @@ def simulate(sigma_true=10.0,n_targets=100,width=201,bullet_width=10.0,num_shots
         an overall likelihood'''
     for i in xrange(n_targets):
         targ=target(width=width,sigma_true=sigma_true,bullet_width=bullet_width)
+        #be sure to turn on correct if you want it 
         targ.correct=correct
         targ.bang(num_shots=num_shots,show_slow=show_slow)
         targ.sigma_likelihood(doplot=False)
@@ -282,9 +300,8 @@ def fit_my_func(sigma, like):
     
     return params
 
-def test():
+def test(prompt=True):
     '''A test that demos how this works'''
-    prompt=True
     print "Testing everything\n"
     print "Making a target and displaying it"
     targ=target()
